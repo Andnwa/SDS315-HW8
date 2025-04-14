@@ -1,0 +1,183 @@
+---
+title: "HW8"
+author: "Andrea Nwaokolo"
+date: "2025-04-13"
+output: html_document
+---
+
+This the my [GitHuB](https://github.com/Andnwa/SDS315-HW8)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(kableExtra)
+library(mosaic )
+library(boot)
+library(MatchIt)
+creatinine <- read.csv('creatinine.csv')
+covid <- read.csv('covid.csv')
+milk <- read.csv('milk.csv')
+```
+
+## Problem 1: regression warm up
+<br>
+
+Part A:
+
+
+The equation for finding the clearance rate for any age is:
+
+$$
+\text{creatclear} = \beta_0 + \beta_1 \cdot \text{age}
+$$
+
+Beta_0 and beta_1: the intercept and slope of the line. The intercept is 148 and the slope is -0.6. The creatinine clearance rate should we expect for a 55-year-old is
+
+$$
+148+(−0.6)⋅55 = 115 mL/min.
+$$
+
+<br>
+
+
+Part B:
+
+
+The creatinine clearance rate decreases with age by 0.6 mL/min the rate of change is the slope of the regression model. This represents a decline in kidney function as a person ages.  
+
+<br>
+
+
+Part C:
+
+
+Using the equation from part A and the slope of -0.6 and the intercept of 148:
+
+$$
+\text{creatclear} = \beta_0 + \beta_1 \cdot \text{age}
+$$
+The predicted creatinine clearance rate for a 40-year-old is: 
+
+$$
+148+(−0.6)⋅40 = 124 mL/min. 
+$$
+The actual creatinine clearance rate for the 40-year-old is 135 mL/min. The predicted creatinine clearance rate for a 40-year-old is 148+(−0.6)⋅40 = 124 mL/min. The actual and predicted creatinine clearance rate for the 60-year-old is 148+(−0.6)⋅60 = 112 mL/min. The 40-year-old's creatinine clearance rate is healthier for their age because their actual creatinine rate is higher than the predicted.
+
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE}
+
+model_creatinine <- lm(creatclear~age, data = creatinine)
+coef(model_creatinine)
+```
+<br>
+
+## Problem 2: Modeling disease growth
+<br>
+
+1. The 95% interval for the growth rate in Italy is estimated to be between 0.160 and 0.208. The 95% interval for the doubling time in Italy is estimated to be between 3.3 days and 4.3 days.
+
+
+<br>
+
+
+2. The 95% interval for the growth rate in Spain is estimated to be between 0.235 and 0.318. The 95% interval for the doubling time in Spain is estimated to be between 2.2 days and 2.9 days.
+
+```{r, echo=FALSE, results='hide', warning=FALSE}
+
+italy <- subset(covid, country == "Italy")
+spain <- subset(covid, country == "Spain")
+
+model_italy <- lm(log(deaths) ~ days_since_first_death, data = italy)
+model_spain <- lm(log(deaths) ~ days_since_first_death, data = spain)
+
+r_italy <- coef(model_italy)[2]
+r_spain <- coef(model_spain)[2]
+
+growth_rate_italy_percent <- round(r_italy * 100, 3)
+growth_rate_spain_percent <- round(r_spain * 100, 3)
+
+doubling_time_italy <- round(70 / growth_rate_italy_percent, 1)
+doubling_time_spain <- round(70 / growth_rate_spain_percent, 1)
+
+bootstrap_fn <- function(data, indices) {
+  resampled <- data[indices, ]
+  model <- lm(log(deaths) ~ days_since_first_death, data = resampled)
+  b <- coef(model)[2]  
+  doubling_time <- log(2) / b
+  return(c(growth_rate = b, doubling_time = doubling_time))
+}
+
+boot_italy <- boot(data = italy, statistic = bootstrap_fn, R = 10000)
+boot_spain <- boot(data = spain, statistic = bootstrap_fn, R = 10000)
+
+
+ci_growth_rate_italy <- boot.ci(boot_italy, type = "perc", index = 1)$percent[4:5]
+ci_doubling_time_italy <- boot.ci(boot_italy, type = "perc", index = 2)$percent[4:5]
+
+ci_growth_rate_spain <- boot.ci(boot_spain, type = "perc", index = 1)$percent[4:5]
+ci_doubling_time_spain <- boot.ci(boot_spain, type = "perc", index = 2)$percent[4:5]
+
+ci_growth_rate_italy <- round(ci_growth_rate_italy, 3)
+ci_doubling_time_italy <- round(ci_doubling_time_italy, 1)
+
+ci_growth_rate_spain <- round(ci_growth_rate_spain, 3)
+ci_doubling_time_spain <- round(ci_doubling_time_spain, 1)
+
+ci_growth_rate_italy
+ci_doubling_time_italy
+ci_growth_rate_spain
+ci_doubling_time_spain
+
+```
+<br>
+
+
+3. Below is the line graph showing reported daily deaths over time for both Italy and Spain.
+
+<br>
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(covid[covid$country %in% c("Italy", "Spain"), ], 
+       aes(x = days_since_first_death, y = deaths, color = country)) +
+  geom_line(size = 1.2) +
+  labs(title = "Daily COVID-19 Deaths by Days Since First Death",
+       x = "Days Since First Death",
+       y = "Reported Deaths",
+       color = "Country") +
+  theme_minimal()
+
+```
+
+
+<br>
+
+## Problem 3: price elasticity of demand
+<br>
+
+```{r, echo=FALSE, results='hide', warning=FALSE}
+
+
+milk$log_price <- log(milk$price)
+milk$log_sales <- log(milk$sales)
+
+model <- lm(log_sales ~ log_price, data = milk)
+beta_hat <- coef(model)["log_price"]
+
+boot_fn <- function(data, indices) {
+  d <- data[indices, ]
+  coef(lm(log_sales ~ log_price, data = d))["log_price"]
+}
+
+
+boot_results <- boot(data = milk, statistic = boot_fn, R = 10000)
+boot.ci(boot_results, type = "perc")
+
+
+
+```
+
+
+The 95% confidence interval for estimated price elasticity of demand for milk is in the (-1.769, -1.456 ). I was able to find the estimate the elasticity by fitting a log-log linear regression model to the data, where the natural logarithm of milk sales was regressed on the natural logarithm of milk price. The elasticity is represented by the slope of the regression line, and I used bootstrapping to generate a 95% confidence interval for this estimate.
+
